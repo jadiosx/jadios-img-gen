@@ -4,8 +4,27 @@ import argparse
 from datetime import datetime
 from dotenv import load_dotenv
 import time
+import threading
+import itertools
+import sys
+
+def spinning_cursor():
+    """Generator for a spinning cursor animation."""
+    while True:
+        for cursor in '|/-\\':
+            yield cursor
+
+def loading_animation(stop_event):
+    """Display a loading animation in the terminal."""
+    spinner = spinning_cursor()
+    while not stop_event.is_set():
+        sys.stdout.write(next(spinner))
+        sys.stdout.flush()
+        sys.stdout.write('\b')
+        time.sleep(0.1)
 
 def get_api_key():
+    """Retrieve or prompt for the OpenAI API key."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         api_key = input("Please enter your OpenAI API key: ")
@@ -17,6 +36,7 @@ def get_api_key():
     return api_key
 
 def generate_image(prompt, api_key, size="1024x1024", quality="standard", style="vivid"):
+    """Generate an image using the DALL-E API."""
     print(f"Generating image for prompt: '{prompt}'")
     print("This may take a moment...")
     
@@ -34,14 +54,25 @@ def generate_image(prompt, api_key, size="1024x1024", quality="standard", style=
         "style": style
     }
 
+    stop_event = threading.Event()
+    loading_thread = threading.Thread(target=loading_animation, args=(stop_event,))
+    loading_thread.start()
+
     start_time = time.time()
     response = requests.post(url, headers=headers, json=data)
     end_time = time.time()
 
-    print(f"Image generation took {end_time - start_time:.2f} seconds.")
+    stop_event.set()
+    loading_thread.join()
+    
+    sys.stdout.write('\b')  # Erase the last spinning cursor
+    sys.stdout.flush()
+
+    print(f"\nImage generation took {end_time - start_time:.2f} seconds.")
     return response.json()
 
 def save_image(image_url, folder):
+    """Download and save the generated image."""
     print("Downloading and saving image...")
     response = requests.get(image_url)
     if response.status_code == 200:
@@ -59,12 +90,16 @@ def save_image(image_url, folder):
 def main():
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Generate images using DALL-E API")
+    parser = argparse.ArgumentParser(description="Generate images using DALL-E API (JADIOS Image Generator)")
     parser.add_argument("prompt", nargs="?", help="The prompt for image generation")
-    parser.add_argument("--size", choices=["1024x1024", "1792x1024", "1024x1792"], default="1024x1024", help="Image size")
-    parser.add_argument("--quality", choices=["standard", "hd"], default="standard", help="Image quality")
-    parser.add_argument("--style", choices=["vivid", "natural"], default="vivid", help="Image style")
-    parser.add_argument("--folder", default="jadios_images", help="Folder to save the generated images")
+    parser.add_argument("--size", choices=["1024x1024", "1792x1024", "1024x1792"], default="1024x1024",
+                        help="Image size (default: 1024x1024)")
+    parser.add_argument("--quality", choices=["standard", "hd"], default="standard",
+                        help="Image quality (default: standard)")
+    parser.add_argument("--style", choices=["vivid", "natural"], default="vivid",
+                        help="Image style (default: vivid)")
+    parser.add_argument("--folder", default="jadios_images",
+                        help="Folder to save the generated images (default: jadios_images)")
     args = parser.parse_args()
 
     api_key = get_api_key()
@@ -106,4 +141,17 @@ def main():
 
 if __name__ == "__main__":
     print("Welcome to JADIOS Image Generator!")
+    print("\nUsage instructions:")
+    print("1. You can provide a prompt directly when running the script:")
+    print("   python3 jadios_img_gen.py 'A futuristic cityscape at night'")
+    print("\n2. Or run the script without a prompt to enter it interactively:")
+    print("   python3 jadios_img_gen.py")
+    print("\n3. Additional options:")
+    print("   --size: Choose image size (1024x1024, 1792x1024, 1024x1792)")
+    print("   --quality: Set image quality (standard, hd)")
+    print("   --style: Select image style (vivid, natural)")
+    print("   --folder: Specify save folder")
+    print("\nExample with options:")
+    print("python3 jadios_img_gen.py 'A serene lake at sunset' --size 1792x1024 --quality hd --style natural")
+    print("\nLet's begin!\n")
     main()

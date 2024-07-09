@@ -10,7 +10,7 @@ venv/
 *.venv
 
 # Ignore generated DALL-E images
-dalle_images/
+jadios_images/
 
 # Ignore OS generated files
 .DS_Store
